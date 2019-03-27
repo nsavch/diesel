@@ -1,13 +1,14 @@
-use quote;
+use proc_macro2::{self, Ident, Span};
 use syn;
 
 use util::*;
 
-pub fn derive(mut item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
-    let struct_name = item.ident;
+pub fn derive(mut item: syn::DeriveInput) -> Result<proc_macro2::TokenStream, Diagnostic> {
+    let struct_name = &item.ident;
 
     {
-        let where_clause = item.generics
+        let where_clause = item
+            .generics
             .where_clause
             .get_or_insert(parse_quote!(where));
         where_clause.predicates.push(parse_quote!(Self: Expression));
@@ -21,12 +22,12 @@ pub fn derive(mut item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
     let dummy_name = format!("_impl_diesel_numeric_ops_for_{}", item.ident);
 
     Ok(wrap_in_dummy_mod(
-        dummy_name.to_lowercase().into(),
+        Ident::new(&dummy_name.to_lowercase(), Span::call_site()),
         quote! {
-            use self::diesel::expression::{ops, Expression, AsExpression};
-            use self::diesel::sql_types::ops::{Add, Sub, Mul, Div};
+            use diesel::expression::{ops, Expression, AsExpression};
+            use diesel::sql_types::ops::{Add, Sub, Mul, Div};
 
-            impl #impl_generics self::std::ops::Add<__Rhs> for #struct_name #ty_generics
+            impl #impl_generics ::std::ops::Add<__Rhs> for #struct_name #ty_generics
             #where_clause
                 <Self as Expression>::SqlType: Add,
                 __Rhs: AsExpression<<<Self as Expression>::SqlType as Add>::Rhs>,
@@ -38,7 +39,7 @@ pub fn derive(mut item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
                 }
             }
 
-            impl #impl_generics self::std::ops::Sub<__Rhs> for #struct_name #ty_generics
+            impl #impl_generics ::std::ops::Sub<__Rhs> for #struct_name #ty_generics
             #where_clause
                 <Self as Expression>::SqlType: Sub,
                 __Rhs: AsExpression<<<Self as Expression>::SqlType as Sub>::Rhs>,
@@ -50,7 +51,7 @@ pub fn derive(mut item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
                 }
             }
 
-            impl #impl_generics self::std::ops::Mul<__Rhs> for #struct_name #ty_generics
+            impl #impl_generics ::std::ops::Mul<__Rhs> for #struct_name #ty_generics
             #where_clause
                 <Self as Expression>::SqlType: Mul,
                 __Rhs: AsExpression<<<Self as Expression>::SqlType as Mul>::Rhs>,
@@ -62,7 +63,7 @@ pub fn derive(mut item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
                 }
             }
 
-            impl #impl_generics self::std::ops::Div<__Rhs> for #struct_name #ty_generics
+            impl #impl_generics ::std::ops::Div<__Rhs> for #struct_name #ty_generics
             #where_clause
                 <Self as Expression>::SqlType: Div,
                 __Rhs: AsExpression<<<Self as Expression>::SqlType as Div>::Rhs>,

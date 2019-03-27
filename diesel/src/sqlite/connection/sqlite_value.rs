@@ -2,11 +2,11 @@ extern crate libsqlite3_sys as ffi;
 
 use std::collections::HashMap;
 use std::os::raw as libc;
+use std::ptr::NonNull;
 use std::{slice, str};
 
 use row::*;
 use sqlite::Sqlite;
-use util::NonNull;
 
 #[allow(missing_debug_implementations, missing_copy_implementations)]
 pub struct SqliteValue {
@@ -19,6 +19,7 @@ pub struct SqliteRow {
 }
 
 impl SqliteValue {
+    #[allow(clippy::new_ret_no_self)]
     pub(crate) unsafe fn new<'a>(inner: *mut ffi::sqlite3_value) -> Option<&'a Self> {
         (inner as *const _ as *const Self).as_ref().and_then(|v| {
             if v.is_null() {

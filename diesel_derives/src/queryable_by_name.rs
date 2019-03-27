@@ -1,15 +1,19 @@
-use quote;
+use proc_macro2::{self, Ident, Span};
 use syn;
 
 use field::*;
 use model::*;
 use util::*;
 
-pub fn derive(item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
+pub fn derive(item: syn::DeriveInput) -> Result<proc_macro2::TokenStream, Diagnostic> {
     let model = Model::from_item(&item)?;
 
-    let struct_name = item.ident;
-    let field_expr = model.fields().iter().map(|f| field_expr(f, &model));
+    let struct_name = &item.ident;
+    let field_expr = model
+        .fields()
+        .iter()
+        .map(|f| field_expr(f, &model))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let (_, ty_generics, ..) = item.generics.split_for_impl();
     let mut generics = item.generics.clone();
@@ -19,7 +23,7 @@ pub fn derive(item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
 
     for field in model.fields() {
         let where_clause = generics.where_clause.get_or_insert(parse_quote!(where));
-        let field_ty = &field.ty;
+        let field_ty = field.ty_for_deserialize()?;
         if field.has_flag("embed") {
             where_clause
                 .predicates
@@ -37,8 +41,8 @@ pub fn derive(item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
     Ok(wrap_in_dummy_mod(
         model.dummy_mod_name("queryable_by_name"),
         quote! {
-            use self::diesel::deserialize::{self, QueryableByName};
-            use self::diesel::row::NamedRow;
+            use diesel::deserialize::{self, QueryableByName};
+            use diesel::row::NamedRow;
 
             impl #impl_generics QueryableByName<__DB>
                 for #struct_name #ty_generics
@@ -54,17 +58,18 @@ pub fn derive(item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
     ))
 }
 
-fn field_expr(field: &Field, model: &Model) -> syn::FieldValue {
+fn field_expr(field: &Field, model: &Model) -> Result<syn::FieldValue, Diagnostic> {
     if field.has_flag("embed") {
-        field
+        Ok(field
             .name
-            .assign(parse_quote!(QueryableByName::build(row)?))
+            .assign(parse_quote!(QueryableByName::build(row)?)))
     } else {
         let column_name = field.column_name();
+        let ty = field.ty_for_deserialize()?;
         let st = sql_type(field, model);
-        field
+        Ok(field
             .name
-            .assign(parse_quote!(row.get::<#st, _>(stringify!(#column_name))?))
+            .assign(parse_quote!(row.get::<#st, #ty>(stringify!(#column_name))?.into())))
     }
 }
 
@@ -74,22 +79,24 @@ fn sql_type(field: &Field, model: &Model) -> syn::Type {
 
     match field.sql_type {
         Some(ref st) => st.clone(),
-        None => if model.has_table_name_attribute() {
-            parse_quote!(diesel::dsl::SqlTypeOf<#table_name::#column_name>)
-        } else {
-            let field_name = match field.name {
-                FieldName::Named(ref x) => x.as_ref(),
-                _ => "field",
-            };
-            field
-                .span
-                .error(format!("Cannot determine the SQL type of {}", field_name))
-                .help(
-                    "Your struct must either be annotated with `#[table_name = \"foo\"]` \
-                     or have all of its fields annotated with `#[sql_type = \"Integer\"]`",
-                )
-                .emit();
-            parse_quote!(())
-        },
+        None => {
+            if model.has_table_name_attribute() {
+                parse_quote!(diesel::dsl::SqlTypeOf<#table_name::#column_name>)
+            } else {
+                let field_name = match field.name {
+                    FieldName::Named(ref x) => x.clone(),
+                    _ => Ident::new("field", Span::call_site()),
+                };
+                field
+                    .span
+                    .error(format!("Cannot determine the SQL type of {}", field_name))
+                    .help(
+                        "Your struct must either be annotated with `#[table_name = \"foo\"]` \
+                         or have all of its fields annotated with `#[sql_type = \"Integer\"]`",
+                    )
+                    .emit();
+                parse_quote!(())
+            }
+        }
     }
 }

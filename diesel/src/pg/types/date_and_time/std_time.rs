@@ -28,7 +28,7 @@ impl ToSql<sql_types::Timestamp, Pg> for SystemTime {
 
 impl FromSql<sql_types::Timestamp, Pg> for SystemTime {
     fn from_sql(bytes: Option<&[u8]>) -> deserialize::Result<Self> {
-        let usecs_passed = try!(<i64 as FromSql<sql_types::BigInt, Pg>>::from_sql(bytes));
+        let usecs_passed = <i64 as FromSql<sql_types::BigInt, Pg>>::from_sql(bytes)?;
         let before_epoch = usecs_passed < 0;
         let time_passed = usecs_to_duration(usecs_passed.abs() as u64);
 
@@ -53,7 +53,7 @@ fn usecs_to_duration(usecs_passed: u64) -> Duration {
 
 fn duration_to_usecs(duration: Duration) -> u64 {
     let seconds = duration.as_secs() * USEC_PER_SEC;
-    let subseconds = duration.subsec_nanos() / NANO_PER_USEC;
+    let subseconds = duration.subsec_micros();
     seconds + u64::from(subseconds)
 }
 

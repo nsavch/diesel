@@ -49,8 +49,9 @@ fn migration_run_inserts_run_on_timestamps() {
 
     let migrations_done: bool = select(sql::<Bool>(
         "EXISTS (SELECT * FROM __diesel_schema_migrations WHERE version >= '1')",
-    )).get_result(&db.conn())
-        .unwrap();
+    ))
+    .get_result(&db.conn())
+    .unwrap();
     assert!(!migrations_done, "Migrations table should be empty");
 
     let result = p.command("migration").arg("run").run();
@@ -66,8 +67,9 @@ fn migration_run_inserts_run_on_timestamps() {
         select(sql::<Bool>(
             "EXISTS (SELECT 1 FROM __diesel_schema_migrations \
              WHERE run_on < DATETIME('now', '+1 hour'))",
-        )).get_result(&db.conn())
-            .unwrap()
+        ))
+        .get_result(&db.conn())
+        .unwrap()
     }
 
     #[cfg(feature = "postgres")]
@@ -75,8 +77,9 @@ fn migration_run_inserts_run_on_timestamps() {
         select(sql::<Bool>(
             "EXISTS (SELECT 1 FROM __diesel_schema_migrations \
              WHERE run_on < NOW() + INTERVAL '1 hour')",
-        )).get_result(&db.conn())
-            .unwrap()
+        ))
+        .get_result(&db.conn())
+        .unwrap()
     }
 
     #[cfg(feature = "mysql")]
@@ -84,8 +87,9 @@ fn migration_run_inserts_run_on_timestamps() {
         select(sql::<Bool>(
             "EXISTS (SELECT 1 FROM __diesel_schema_migrations \
              WHERE run_on < NOW() + INTERVAL 1 HOUR)",
-        )).get_result(&db.conn())
-            .unwrap()
+        ))
+        .get_result(&db.conn())
+        .unwrap()
     }
 
     assert!(
@@ -105,7 +109,45 @@ fn empty_migrations_are_not_valid() {
     let result = p.command("migration").arg("run").run();
 
     assert!(!result.is_success());
-    assert!(result.stdout().contains("empty migration"));
+    assert!(result
+        .stderr()
+        .contains("Failed with: Attempted to run an empty migration."));
+}
+
+#[test]
+fn error_migrations_fails() {
+    let p = project("run_error_migrations_fails")
+        .folder("migrations")
+        .build();
+
+    p.command("setup").run();
+
+    p.create_migration(
+        "run_error_migrations_fails",
+        "CREATE TABLE users (id INTEGER PRIMARY KEY}",
+        "DROP TABLE users",
+    );
+
+    let result = p.command("migration").arg("run").run();
+
+    assert!(!result.is_success());
+    assert!(result.stderr().contains("Failed with: "));
+}
+
+#[test]
+fn output_contains_path_to_migration_script() {
+    let p = project("output_contains_path_to_migration_script")
+        .folder("migrations")
+        .build();
+
+    p.command("setup").run();
+
+    p.create_migration("output_contains_path_to_migration_script", "", "");
+
+    let result = p.command("migration").arg("run").run();
+
+    assert!(!result.is_success());
+    assert!(result.stdout().contains("up.sql"));
 }
 
 #[test]
@@ -194,7 +236,8 @@ fn migration_run_runs_pending_migrations_custom_database_url_1() {
 
     assert!(!db.table_exists("users"));
 
-    let result = p.command_without_database_url("migration")
+    let result = p
+        .command_without_database_url("migration")
         .arg("run")
         .arg("--database-url")
         .arg(db_url)
@@ -228,7 +271,8 @@ fn migration_run_runs_pending_migrations_custom_database_url_2() {
 
     assert!(!db.table_exists("users"));
 
-    let result = p.command_without_database_url("migration")
+    let result = p
+        .command_without_database_url("migration")
         .arg("--database-url")
         .arg(db_url)
         .arg("run")
@@ -263,7 +307,8 @@ fn migration_run_runs_pending_migrations_custom_migration_dir_1() {
 
     assert!(!db.table_exists("users"));
 
-    let result = p.command("migration")
+    let result = p
+        .command("migration")
         .arg("run")
         .arg("--migration-dir")
         .arg(p.migration_dir_in_directory("custom_migrations"))
@@ -298,7 +343,8 @@ fn migration_run_runs_pending_migrations_custom_migration_dir_2() {
 
     assert!(!db.table_exists("users"));
 
-    let result = p.command("migration")
+    let result = p
+        .command("migration")
         .arg("--migration-dir")
         .arg(p.migration_dir_in_directory("custom_migrations"))
         .arg("run")
@@ -320,9 +366,9 @@ fn migration_run_updates_schema_if_config_present() {
         .file(
             "diesel.toml",
             r#"
-[print_schema]
-file = "src/my_schema.rs"
-"#,
+            [print_schema]
+            file = "src/my_schema.rs"
+            "#,
         )
         .build();
 
@@ -405,4 +451,60 @@ fn migrations_can_be_run_with_no_cargo_toml() {
         result.stdout()
     );
     assert!(db.table_exists("users"));
+}
+
+#[test]
+fn verify_schema_errors_if_schema_file_would_change() {
+    let p = project("migration_run_verify_schema_errors")
+        .folder("migrations")
+        .file(
+            "diesel.toml",
+            r#"
+            [print_schema]
+            file = "src/my_schema.rs"
+            "#,
+        )
+        .build();
+
+    // Make sure the project is setup
+    p.command("setup").run();
+
+    p.create_migration(
+        "12345_create_users_table",
+        "CREATE TABLE users (id INTEGER PRIMARY KEY)",
+        "DROP TABLE users",
+    );
+
+    assert!(!p.has_file("src/my_schema.rs"));
+
+    let result = p.command("migration").arg("run").run();
+
+    assert!(result.is_success(), "Result was unsuccessful {:?}", result);
+    assert!(p.has_file("src/my_schema.rs"));
+
+    p.create_migration(
+        "12346_create_posts_table",
+        "CREATE TABLE posts (id INTEGER PRIMARY KEY)",
+        "DROP TABLE posts",
+    );
+
+    let result = p
+        .command("migration")
+        .arg("run")
+        .arg("--locked-schema")
+        .run();
+
+    assert!(
+        !result.is_success(),
+        "Result was successful, expected to fail {:?}",
+        result
+    );
+    assert!(
+        result
+            .stderr()
+            .contains("Command would result in changes to src/my_schema.rs"),
+        "Unexpected stderr {}",
+        result.stderr()
+    );
+    assert!(p.has_file("src/my_schema.rs"));
 }

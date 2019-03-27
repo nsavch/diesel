@@ -1,10 +1,11 @@
 use backend::Backend;
 use expression::*;
 use query_builder::*;
+use query_source::Table;
 use result::QueryResult;
 use sql_types::IntoNullable;
 
-#[derive(Debug, Copy, Clone, DieselNumericOps)]
+#[derive(Debug, Copy, Clone, DieselNumericOps, NonAggregate)]
 pub struct Nullable<T>(T);
 
 impl<T> Nullable<T> {
@@ -46,9 +47,10 @@ impl<T: QueryId> QueryId for Nullable<T> {
     const HAS_STATIC_QUERY_ID: bool = T::HAS_STATIC_QUERY_ID;
 }
 
-impl<T> NonAggregate for Nullable<T>
+impl<T, QS> SelectableExpression<QS> for Nullable<T>
 where
-    T: NonAggregate,
-    Nullable<T>: Expression,
+    Self: AppearsOnTable<QS>,
+    T: SelectableExpression<QS>,
+    QS: Table,
 {
 }

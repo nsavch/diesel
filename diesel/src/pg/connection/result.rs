@@ -14,6 +14,7 @@ pub struct PgResult {
 }
 
 impl PgResult {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(internal_result: RawResult) -> QueryResult<Self> {
         use self::ExecStatusType::*;
 
@@ -35,6 +36,9 @@ impl PgResult {
                         Some(error_codes::UNIQUE_VIOLATION) => DatabaseErrorKind::UniqueViolation,
                         Some(error_codes::FOREIGN_KEY_VIOLATION) => {
                             DatabaseErrorKind::ForeignKeyViolation
+                        }
+                        Some(error_codes::SERIALIZATION_FAILURE) => {
+                            DatabaseErrorKind::SerializationFailure
                         }
                         _ => DatabaseErrorKind::__Unknown,
                     };
@@ -162,4 +166,5 @@ mod error_codes {
     //! They are not exposed programmatically through libpq.
     pub const UNIQUE_VIOLATION: &str = "23505";
     pub const FOREIGN_KEY_VIOLATION: &str = "23503";
+    pub const SERIALIZATION_FAILURE: &str = "40001";
 }

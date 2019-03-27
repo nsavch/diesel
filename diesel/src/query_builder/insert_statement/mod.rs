@@ -32,6 +32,7 @@ use sqlite::{Sqlite, SqliteConnection};
 /// [`values`]: #method.values
 /// [`default_values`]: #method.default_values
 #[derive(Debug, Clone, Copy)]
+#[must_use = "Queries are only executed when calling `load`, `get_result` or similar."]
 pub struct IncompleteInsertStatement<T, Op> {
     target: T,
     operator: Op,
@@ -109,6 +110,7 @@ impl<T, Op> IncompleteInsertStatement<T, Op> {
 }
 
 #[derive(Debug, Copy, Clone)]
+#[must_use = "Queries are only executed when calling `load`, `get_result` or similar."]
 /// A fully constructed insert statement.
 ///
 /// The parameters of this struct represent:
@@ -200,8 +202,7 @@ where
 }
 
 #[cfg(feature = "sqlite")]
-#[deprecated(since = "1.2.0", note = "Use `<&'a [U] as Insertable<T>>::Values` instead")]
-impl<'a, T, U, Op> ExecuteDsl<SqliteConnection> for InsertStatement<T, &'a [U], Op>
+impl<'a, T, U, Op> ExecuteDsl<SqliteConnection> for InsertStatement<T, BatchInsert<'a, U, T>, Op>
 where
     &'a U: Insertable<T>,
     InsertStatement<T, <&'a U as Insertable<T>>::Values, Op>: QueryFragment<Sqlite>,
@@ -212,13 +213,14 @@ where
         use connection::Connection;
         conn.transaction(|| {
             let mut result = 0;
-            for record in query.records {
+            for record in query.records.records {
                 result += InsertStatement::new(
                     query.target,
                     record.values(),
                     query.operator,
                     query.returning,
-                ).execute(conn)?;
+                )
+                .execute(conn)?;
             }
             Ok(result)
         })
@@ -226,23 +228,8 @@ where
 }
 
 #[cfg(feature = "sqlite")]
-impl<'a, T, U, Op> ExecuteDsl<SqliteConnection> for InsertStatement<T, BatchInsert<'a, U, T>, Op>
-where
-    InsertStatement<T, &'a [U], Op>: ExecuteDsl<SqliteConnection>,
-{
-    fn execute(query: Self, conn: &SqliteConnection) -> QueryResult<usize> {
-        InsertStatement::new(
-            query.target,
-            query.records.records,
-            query.operator,
-            query.returning,
-        ).execute(conn)
-    }
-}
-
-#[cfg(feature = "sqlite")]
 impl<T, U, Op> ExecuteDsl<SqliteConnection>
-    for InsertStatement<T, OwnedBatchInsert<ValuesClause<U, T>>, Op>
+    for InsertStatement<T, OwnedBatchInsert<ValuesClause<U, T>, T>, Op>
 where
     InsertStatement<T, ValuesClause<U, T>, Op>: QueryFragment<Sqlite>,
     T: Copy,
@@ -385,51 +372,36 @@ impl QueryFragment<Mysql> for Replace {
 /// from compiling.
 pub trait UndecoratedInsertRecord<Table> {}
 
-impl<'a, T, Tab> UndecoratedInsertRecord<Tab> for &'a T
-where
-    T: ?Sized + UndecoratedInsertRecord<Tab>,
+impl<'a, T, Tab> UndecoratedInsertRecord<Tab> for &'a T where
+    T: ?Sized + UndecoratedInsertRecord<Tab>
 {
 }
 
-impl<T, U> UndecoratedInsertRecord<T::Table> for ColumnInsertValue<T, U>
-where
-    T: Column,
+impl<T, U> UndecoratedInsertRecord<T::Table> for ColumnInsertValue<T, U> where T: Column {}
+
+impl<T, Table> UndecoratedInsertRecord<Table> for [T] where T: UndecoratedInsertRecord<Table> {}
+
+impl<'a, T, Table> UndecoratedInsertRecord<Table> for BatchInsert<'a, T, Table> where
+    T: UndecoratedInsertRecord<Table>
 {
 }
 
-impl<T, Table> UndecoratedInsertRecord<Table> for [T]
-where
-    T: UndecoratedInsertRecord<Table>,
+impl<T, Table> UndecoratedInsertRecord<Table> for OwnedBatchInsert<T, Table> where
+    T: UndecoratedInsertRecord<Table>
 {
 }
 
-impl<'a, T, Table> UndecoratedInsertRecord<Table> for BatchInsert<'a, T, Table>
-where
-    T: UndecoratedInsertRecord<Table>,
+impl<T, Table> UndecoratedInsertRecord<Table> for Vec<T> where [T]: UndecoratedInsertRecord<Table> {}
+
+impl<Lhs, Rhs> UndecoratedInsertRecord<Lhs::Table> for Eq<Lhs, Rhs> where Lhs: Column {}
+
+impl<Lhs, Rhs, Tab> UndecoratedInsertRecord<Tab> for Option<Eq<Lhs, Rhs>> where
+    Eq<Lhs, Rhs>: UndecoratedInsertRecord<Tab>
 {
 }
 
-impl<T, Table> UndecoratedInsertRecord<Table> for Vec<T>
-where
-    [T]: UndecoratedInsertRecord<Table>,
-{
-}
-
-impl<Lhs, Rhs> UndecoratedInsertRecord<Lhs::Table> for Eq<Lhs, Rhs>
-where
-    Lhs: Column,
-{
-}
-
-impl<Lhs, Rhs, Tab> UndecoratedInsertRecord<Tab> for Option<Eq<Lhs, Rhs>>
-where
-    Eq<Lhs, Rhs>: UndecoratedInsertRecord<Tab>,
-{
-}
-
-impl<T, Table> UndecoratedInsertRecord<Table> for ValuesClause<T, Table>
-where
-    T: UndecoratedInsertRecord<Table>,
+impl<T, Table> UndecoratedInsertRecord<Table> for ValuesClause<T, Table> where
+    T: UndecoratedInsertRecord<Table>
 {
 }
 

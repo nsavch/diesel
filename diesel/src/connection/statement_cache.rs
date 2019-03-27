@@ -108,7 +108,7 @@ pub struct StatementCache<DB: Backend, Statement> {
     pub cache: RefCell<HashMap<StatementCacheKey<DB>, Statement>>,
 }
 
-#[cfg_attr(feature = "clippy", allow(len_without_is_empty, new_without_default_derive))]
+#[allow(clippy::len_without_is_empty, clippy::new_without_default)]
 impl<DB, Statement> StatementCache<DB, Statement>
 where
     DB: Backend,
@@ -138,10 +138,10 @@ where
     {
         use std::collections::hash_map::Entry::{Occupied, Vacant};
 
-        let cache_key = try!(StatementCacheKey::for_source(source, bind_types));
+        let cache_key = StatementCacheKey::for_source(source, bind_types)?;
 
         if !source.is_safe_to_cache_prepared()? {
-            let sql = try!(cache_key.sql(source));
+            let sql = cache_key.sql(source)?;
             return prepare_fn(&sql).map(MaybeCached::CannotCache);
         }
 
@@ -150,14 +150,15 @@ where
                 Occupied(entry) => Ok(entry.into_mut()),
                 Vacant(entry) => {
                     let statement = {
-                        let sql = try!(entry.key().sql(source));
+                        let sql = entry.key().sql(source)?;
                         prepare_fn(&sql)
                     };
 
-                    Ok(entry.insert(try!(statement)))
+                    Ok(entry.insert(statement?))
                 }
             }
-        }).map(MaybeCached::Cached)
+        })
+        .map(MaybeCached::Cached)
     }
 }
 
@@ -212,7 +213,7 @@ where
         match T::query_id() {
             Some(id) => Ok(StatementCacheKey::Type(id)),
             None => {
-                let sql = try!(Self::construct_sql(source));
+                let sql = Self::construct_sql(source)?;
                 Ok(StatementCacheKey::Sql {
                     sql: sql,
                     bind_types: bind_types.into(),
@@ -230,7 +231,7 @@ where
 
     fn construct_sql<T: QueryFragment<DB>>(source: &T) -> QueryResult<String> {
         let mut query_builder = DB::QueryBuilder::default();
-        try!(source.to_sql(&mut query_builder));
+        source.to_sql(&mut query_builder)?;
         Ok(query_builder.finish())
     }
 }
@@ -239,25 +240,17 @@ where
 ///
 /// If we were in Haskell (and if `RefMut` were a functor), this would just be
 /// `sequenceA`.
-fn refmut_map_result<T, U, F>(refmut: RefMut<T>, mapper: F) -> QueryResult<RefMut<U>>
+fn refmut_map_result<T, U, F>(mut refmut: RefMut<T>, mapper: F) -> QueryResult<RefMut<U>>
 where
     F: FnOnce(&mut T) -> QueryResult<&mut U>,
 {
-    use std::mem;
-
-    let mut error = None;
-    let result = RefMut::map(refmut, |mutref| match mapper(mutref) {
-        Ok(x) => x,
-        Err(e) => {
-            error = Some(e);
-            #[cfg_attr(feature = "clippy", allow(invalid_ref))]
-            unsafe {
-                mem::uninitialized()
-            }
-        }
-    });
-    match error {
-        Some(e) => Err(e),
-        None => Ok(result),
-    }
+    // We can't just use `RefMut::map` here, since to lift the error out of that
+    // closure we'd need to return *something*.
+    //
+    // Instead we will very briefly convert to a raw pointer to eliminate
+    // lifetimes from the equation. Ultimately the cast is safe since the input
+    // and output lifetimes are identical. However, without the raw pointer
+    // we would have two live mutable references at the same time.
+    let ptr = mapper(&mut *refmut).map(|x| x as *mut _)?;
+    Ok(RefMut::map(refmut, |_| unsafe { &mut *ptr }))
 }

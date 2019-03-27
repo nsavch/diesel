@@ -99,8 +99,6 @@ macro_rules! __diesel_column {
 /// By default this allows a maximum of 32 columns per table.
 /// You can increase this limit to 64 by enabling the `64-column-tables` feature.
 /// You can increase it to 128 by enabling the `128-column-tables` feature.
-/// (The leading `x` is due to a bug in crates.io and will be removed in a
-/// future release)
 /// You can decrease it to 16 columns,
 /// which improves compilation time,
 /// by disabling the default features of Diesel.
@@ -1049,15 +1047,6 @@ macro_rules! allow_types_to_appear_in_same_query {
     () => {};
 }
 
-#[macro_export]
-#[doc(hidden)]
-/// Used by `diesel_derives`, which can't access `$crate`
-macro_rules! __diesel_use_everything {
-    () => {
-        pub use $crate::*;
-    };
-}
-
 /// Gets the value out of an option, or returns an error.
 ///
 /// This is used by `FromSql` implementations.
@@ -1076,10 +1065,9 @@ macro_rules! not_none {
 #[macro_use]
 mod internal;
 #[macro_use]
-#[cfg(diesel_experimental)]
 mod aliasing;
-#[macro_use]
-mod query_id;
+// #[macro_use]
+// mod query_id;
 #[macro_use]
 mod static_cond;
 #[macro_use]

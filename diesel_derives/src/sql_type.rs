@@ -1,11 +1,12 @@
-use quote;
+use proc_macro2;
+use proc_macro2::*;
 use syn;
 
 use meta::*;
 use util::*;
 
-pub fn derive(item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
-    let struct_name = item.ident;
+pub fn derive(item: syn::DeriveInput) -> Result<proc_macro2::TokenStream, Diagnostic> {
+    let struct_name = &item.ident;
     let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
     let sqlite_tokens = sqlite_tokens(&item);
@@ -14,7 +15,7 @@ pub fn derive(item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
 
     let dummy_name = format!("_impl_sql_type_for_{}", item.ident);
     Ok(wrap_in_dummy_mod(
-        dummy_name.to_lowercase().into(),
+        Ident::new(&dummy_name.to_lowercase(), Span::call_site()),
         quote! {
             impl #impl_generics diesel::sql_types::NotNull
                 for #struct_name #ty_generics
@@ -35,7 +36,7 @@ pub fn derive(item: syn::DeriveInput) -> Result<quote::Tokens, Diagnostic> {
     ))
 }
 
-fn sqlite_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
+fn sqlite_tokens(item: &syn::DeriveInput) -> Option<proc_macro2::TokenStream> {
     MetaItem::with_name(&item.attrs, "sqlite_type")
         .map(|attr| attr.expect_ident_value())
         .and_then(|ty| {
@@ -43,7 +44,7 @@ fn sqlite_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
                 return None;
             }
 
-            let struct_name = item.ident;
+            let struct_name = &item.ident;
             let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
             Some(quote! {
@@ -59,7 +60,7 @@ fn sqlite_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
         })
 }
 
-fn mysql_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
+fn mysql_tokens(item: &syn::DeriveInput) -> Option<proc_macro2::TokenStream> {
     MetaItem::with_name(&item.attrs, "mysql_type")
         .map(|attr| attr.expect_ident_value())
         .and_then(|ty| {
@@ -67,7 +68,7 @@ fn mysql_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
                 return None;
             }
 
-            let struct_name = item.ident;
+            let struct_name = &item.ident;
             let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
             Some(quote! {
@@ -83,25 +84,27 @@ fn mysql_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
         })
 }
 
-fn pg_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
+fn pg_tokens(item: &syn::DeriveInput) -> Option<proc_macro2::TokenStream> {
     MetaItem::with_name(&item.attrs, "postgres")
-        .and_then(|attr| {
-            get_type_name(&attr)
-                .or_else(|| get_oids(&attr))
-                .or_else(|| {
-                    attr.span()
-                        .error("Missing required options")
-                        .help("Valid options are `type_name` or `oid` and `array_oid`")
-                        .emit();
-                    None
-                })
+        .map(|attr| {
+            if let Some(x) = get_type_name(&attr)? {
+                Ok(x)
+            } else if let Some(x) = get_oids(&attr)? {
+                Ok(x)
+            } else {
+                Err(attr
+                    .span()
+                    .error("Missing required options")
+                    .help("Valid options are `type_name` or `oid` and `array_oid`"))
+            }
         })
+        .and_then(|res| res.map_err(|e| e.emit()).ok())
         .and_then(|ty| {
             if cfg!(not(feature = "postgres")) {
                 return None;
             }
 
-            let struct_name = item.ident;
+            let struct_name = &item.ident;
             let (impl_generics, ty_generics, where_clause) = item.generics.split_for_impl();
 
             let metadata_fn = match ty {
@@ -121,7 +124,7 @@ fn pg_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
             };
 
             Some(quote! {
-                use self::diesel::pg::{PgMetadataLookup, PgTypeMetadata};
+                use diesel::pg::{PgMetadataLookup, PgTypeMetadata};
 
                 impl #impl_generics diesel::sql_types::HasSqlType<#struct_name #ty_generics>
                     for diesel::pg::Pg
@@ -133,26 +136,25 @@ fn pg_tokens(item: &syn::DeriveInput) -> Option<quote::Tokens> {
         })
 }
 
-fn get_type_name(attr: &MetaItem) -> Option<PgType> {
-    attr.nested_item("type_name").ok().map(|ty| {
+fn get_type_name(attr: &MetaItem) -> Result<Option<PgType>, Diagnostic> {
+    Ok(attr.nested_item("type_name")?.map(|ty| {
         attr.warn_if_other_options(&["type_name"]);
         PgType::Lookup(ty.expect_str_value())
-    })
+    }))
 }
 
-fn get_oids(attr: &MetaItem) -> Option<PgType> {
-    attr.nested_item("oid").ok().map(|oid| {
+fn get_oids(attr: &MetaItem) -> Result<Option<PgType>, Diagnostic> {
+    if let Some(oid) = attr.nested_item("oid")? {
         attr.warn_if_other_options(&["oid", "array_oid"]);
-        let array_oid = attr.nested_item("array_oid")
-            .emit_error()
-            .map(|a| a.expect_int_value())
-            .unwrap_or(0);
+        let array_oid = attr.required_nested_item("array_oid")?.expect_int_value();
         let oid = oid.expect_int_value();
-        PgType::Fixed {
+        Ok(Some(PgType::Fixed {
             oid: oid as u32,
             array_oid: array_oid as u32,
-        }
-    })
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 enum PgType {

@@ -21,8 +21,8 @@ pub enum Status {
     Published { at: NaiveDateTime },
 }
 
+use diesel::deserialize::Queryable;
 use diesel::pg::Pg;
-use diesel::query_source::Queryable;
 use diesel::sql_types::{Nullable, Timestamp};
 
 impl Queryable<Nullable<Timestamp>, Pg> for Status {
@@ -53,8 +53,7 @@ pub fn render(post: &Post, user: &User, comments: &[(Comment, User)]) {
         }
         Published { at } => println!("Published at {}", at.format("%F %T")),
     }
-    print!("\n");
-    println!("{}", post.body);
+    println!("\n{}", post.body);
 
     if !comments.is_empty() {
         println!("---------------\n");
@@ -66,9 +65,9 @@ pub fn render(post: &Post, user: &User, comments: &[(Comment, User)]) {
                 let edited = comment.updated_at.format("%F %T");
                 print!(" (last edited {})", edited);
             }
-            print!("\n{}\n", comment.body);
+            println!("\n{}", comment.body);
         }
     }
 
-    print!("===============\n\n");
+    println!("===============\n");
 }

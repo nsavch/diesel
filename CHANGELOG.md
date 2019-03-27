@@ -6,16 +6,121 @@ for Rust libraries in [RFC #1105](https://github.com/rust-lang/rfcs/blob/master/
 
 ## Unreleased
 
+### Added
+
+* `NonAggregate` can now be derived for simple cases.
+
+### Removed
+
+* All previously deprecated items have been removed.
+
+### Changed
+
+* The way [the `Backend` trait][backend-2-0-0] handles its `RawValue` type has
+  been changed to allow non-references. Users of this type (e.g. code written
+  `&DB::RawValue` or `&<DB as Backend>::RawValue>`) should use
+  [`backend::RawValue<DB>`][raw-value-2-0-0] instead. Implementors of `Backend`
+  should check the relevant section of [the migration guide][2-0-migration].
+
+[backend-2-0-0]: http://docs.diesel.rs/diesel/backend/trait.Backend.html
+[raw-value-2-0-0]: http://docs.diesel.rs/diesel/backend/type.RawValue.html
+
+### Fixed
+
+* Many types were incorrectly considered non-aggregate when they should not
+  have been. All types in Diesel are now correctly only considered
+  non-aggregate if their parts are.
+
+### Deprecated
+
+* `diesel_(prefix|postfix|infix)_operator!` have been deprecated. These macros
+  are now available without the `diesel_` prefix. With Rust 2018 they can be
+  invoked as `diesel::infix_operator!` instead.
+
+
+
+[2-0-migration]: FIXME write a migration guide
+
+## [1.4.2] - 2019-03-19
+
+### Fixed
+
+* Parenthesis are now inserted around all mathematical operations. This means
+  that `(2.into_sql() + 3) * 4` will correctly evaluate to 20 as expected.
+  Previously we would generate SQL that evaluated to 14. This could even result
+  in runtime errors if multiple types were involved (for example, `interval *
+  (integer + 1)`)
+
+## [1.4.1] - 2019-01-24
+
+### Fixed
+
+* This release fixes a minor memory safety issue in SQLite. This bug would only
+  occur in an error handling branch that should never occur in practice.
+
+### Added
+
+* Added `BoxedSqlQuery`. This allows users to do a variable amount of `.sql` or
+  `.bind` calls without changing the underlying type.
+* Added `.sql` to `SqlQuery` and `UncheckedBind` to allow appending SQL code to
+  an existing query.
+
+## [1.4.0] - 2019-01-20
+
 ### Fixed
 
 * `embed_migrations!` will no longer emit an unused import warning
+* Diesel now supports uuid 0.7 by adding the new feature flag `uuidv07`
 
 ### Added
+
+* Diesel CLI can be configured to error if a command would result in changes
+  to your schema file by passing `--locked-schema`. This is intended for use
+  in CI and production deploys, to ensure that the committed schema file is
+  up to date.
 
 * A helper trait has been added for implementing `ToSql` for PG composite types.
   See [`WriteTuple`][write-tuple-1-4-0] for details.
 
 [write-tuple-1-4-0]: docs.diesel.rs/diesel/serialize/trait.WriteTuple.html
+
+* Added support for MySQL's `UNSIGNED TINYINT`
+
+* `DatabaseErrorKind::SerializationFailure` has been added, corresponding to
+  SQLSTATE code 40001 (A `SERIALIZABLE` isolation level transaction failed to
+  commit due to a read/write dependency on another transaction). This error is
+  currently only detected on PostgreSQL.
+
+* Diesel CLI can now generate completions for zsh and fish. See `diesel
+  completions --help` for details.
+
+* `#[belongs_to]` can now accept types that are generic over lifetimes (for
+  example, if one of the fields has the type `Cow<'a, str>`). To define an
+  association to such a type, write `#[belongs_to(parent = "User<'_>")]`
+
+* `Nullable<Text>` now supports `ilike` expression on  in PostgreSQL.
+
+* `diesel_manage_updated_at('table_name')` is now available on SQLite. This
+  function can be called in your migrations to create a trigger which
+  automatically sets the `updated_at` column, unless that column was updated in
+  the query.
+
+### Changed
+
+* Diesel's derives now require that `extern crate diesel;` be at your crate root
+  (e.g. `src/lib.rs` or `src/main.rs`)
+
+* `Tinyint` has been renamed to `TinyInt` and an alias has been created from `Tinyint` to `TinyInt`.
+
+* The minimal officially supported rustc version is now 1.31.0
+
+## [1.3.3] - 2018-09-12
+
+### Fixed
+
+* Fixed an issue that occurred with MySQL 8.0 when calling `.execute` or
+  `.batch_execute` with a single query that returned a result set (such as our
+  `SELECT 1` health check in `r2d2`).
 
 ## [1.3.2] - 2018-06-13
 
@@ -1545,3 +1650,7 @@ for Rust libraries in [RFC #1105](https://github.com/rust-lang/rfcs/blob/master/
 [1.3.0]: https://github.com/diesel-rs/diesel/compare/v1.2.2...v1.3.0
 [1.3.1]: https://github.com/diesel-rs/diesel/compare/v1.3.0...v1.3.1
 [1.3.2]: https://github.com/diesel-rs/diesel/compare/v1.3.1...v1.3.2
+[1.3.3]: https://github.com/diesel-rs/diesel/compare/v1.3.2...v1.3.3
+[1.4.0]: https://github.com/diesel-rs/diesel/compare/v1.3.0...v1.4.0
+[1.4.1]: https://github.com/diesel-rs/diesel/compare/v1.4.0...v1.4.1
+[1.4.2]: https://github.com/diesel-rs/diesel/compare/v1.4.1...v1.4.2

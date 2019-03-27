@@ -79,7 +79,7 @@ impl From<io::Error> for MigrationError {
 
 /// Errors that occur while running migrations
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "clippy", allow(enum_variant_names))]
+#[allow(clippy::enum_variant_names)]
 pub enum RunMigrationsError {
     /// A general migration error occured
     MigrationError(MigrationError),
@@ -105,7 +105,7 @@ impl Error for RunMigrationsError {
 
 impl fmt::Display for RunMigrationsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.description().fmt(f)
+        write!(f, "Failed with: {}", self.description())
     }
 }
 

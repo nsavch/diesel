@@ -197,6 +197,26 @@ fn i32_to_sql_integer() {
 
 #[test]
 #[cfg(feature = "mysql")]
+fn u8_to_sql_integer() {
+    assert!(query_to_sql_equality::<Unsigned<TinyInt>, u8>("255", 255));
+    assert!(query_to_sql_equality::<Unsigned<TinyInt>, u8>("0", 0));
+    assert!(query_to_sql_equality::<Unsigned<TinyInt>, u8>("1", 1));
+    assert!(query_to_sql_equality::<Unsigned<TinyInt>, u8>("123", 123));
+    assert!(!query_to_sql_equality::<Unsigned<TinyInt>, u8>("0", 1));
+    assert!(!query_to_sql_equality::<Unsigned<TinyInt>, u8>("254", 255));
+}
+
+#[test]
+#[cfg(feature = "mysql")]
+fn u8_from_sql() {
+    assert_eq!(0, query_single_value::<Unsigned<TinyInt>, u8>("0"));
+    assert_eq!(255, query_single_value::<Unsigned<TinyInt>, u8>("255"));
+    assert_ne!(254, query_single_value::<Unsigned<TinyInt>, u8>("255"));
+    assert_eq!(123, query_single_value::<Unsigned<TinyInt>, u8>("123"));
+}
+
+#[test]
+#[cfg(feature = "mysql")]
 fn u16_to_sql_integer() {
     assert!(query_to_sql_equality::<Unsigned<SmallInt>, u16>(
         "65535", 65535
@@ -609,6 +629,23 @@ fn pg_array_from_sql() {
     assert_eq!(
         vec!["Hello".to_string(), "".to_string(), "world".to_string()],
         query_single_value::<Array<VarChar>, Vec<String>>("ARRAY['Hello', '', 'world']")
+    );
+}
+
+#[cfg(feature = "postgres")]
+#[test]
+fn pg_array_from_sql_non_one_lower_bound() {
+    assert_eq!(
+        vec![true, false, true],
+        query_single_value::<Array<Bool>, Vec<bool>>("'[0:2]={t, f, t}'::bool[]")
+    );
+    assert_eq!(
+        vec![true, false, true],
+        query_single_value::<Array<Bool>, Vec<bool>>("'[1:3]={t, f, t}'::bool[]")
+    );
+    assert_eq!(
+        vec![true, false, true],
+        query_single_value::<Array<Bool>, Vec<bool>>("'[2:4]={t, f, t}'::bool[]")
     );
 }
 
@@ -1182,11 +1219,9 @@ fn test_range_from_sql() {
     );
 
     let query = "SELECT '(1,1]'::int4range";
-    assert!(
-        sql::<Range<Int4>>(query)
-            .load::<(Bound<i32>, Bound<i32>)>(&connection)
-            .is_err()
-    );
+    assert!(sql::<Range<Int4>>(query)
+        .load::<(Bound<i32>, Bound<i32>)>(&connection)
+        .is_err());
 }
 
 #[cfg(feature = "postgres")]

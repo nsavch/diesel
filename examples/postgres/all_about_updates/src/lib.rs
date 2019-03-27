@@ -72,8 +72,8 @@ fn examine_sql_from_publish_pending_posts() {
     );
 }
 
-pub fn publish_post(post: Post, conn: &PgConnection) -> QueryResult<usize> {
-    diesel::update(&post)
+pub fn publish_post(post: &Post, conn: &PgConnection) -> QueryResult<usize> {
+    diesel::update(post)
         .set(posts::draft.eq(false))
         .execute(conn)
 }
@@ -108,7 +108,7 @@ fn examine_sql_from_increment_visit_counts() {
     use posts::dsl::*;
 
     assert_eq!(
-        "UPDATE \"posts\" SET \"visit_count\" = \"posts\".\"visit_count\" + $1 \
+        "UPDATE \"posts\" SET \"visit_count\" = (\"posts\".\"visit_count\" + $1) \
          -- binds: [1]",
         debug_query::<Pg, _>(&diesel::update(posts).set(visit_count.eq(visit_count + 1)))
             .to_string()
@@ -141,8 +141,8 @@ fn examine_sql_from_hide_everything() {
     );
 }
 
-pub fn update_from_post_fields(post: Post, conn: &PgConnection) -> QueryResult<usize> {
-    diesel::update(posts::table).set(&post).execute(conn)
+pub fn update_from_post_fields(post: &Post, conn: &PgConnection) -> QueryResult<usize> {
+    diesel::update(posts::table).set(post).execute(conn)
 }
 
 #[test]

@@ -1,4 +1,6 @@
-//! Connection pooling via r2d2
+//! Connection pooling via r2d2.
+//!
+//! Note: This module requires enabling the `r2d2` feature
 
 extern crate r2d2;
 
@@ -16,7 +18,7 @@ use std::marker::PhantomData;
 
 use backend::UsesAnsiSavepointSyntax;
 use connection::{AnsiTransactionManager, SimpleConnection};
-use deserialize::QueryableByName;
+use deserialize::{Queryable, QueryableByName};
 use prelude::*;
 use query_builder::{AsQuery, QueryFragment, QueryId};
 use sql_types::HasSqlType;

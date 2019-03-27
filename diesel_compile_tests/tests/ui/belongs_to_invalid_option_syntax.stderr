@@ -1,48 +1,48 @@
 error: `belongs_to` must be in the form `belongs_to(...)`
- --> <macro expansion>:1:1
-  |
-1 | #[belongs_to]
-  | ^
+  --> $DIR/belongs_to_invalid_option_syntax.rs:23:3
+   |
+23 | #[belongs_to]
+   |   ^^^^^^^^^^
 
 error: `belongs_to` must be in the form `belongs_to(...)`
- --> <macro expansion>:1:1
-  |
-1 | #[belongs_to = "Bar"]
-  | ^
+  --> $DIR/belongs_to_invalid_option_syntax.rs:24:3
+   |
+24 | #[belongs_to = "Bar"]
+   |   ^^^^^^^^^^
 
 error: Expected a struct name
- --> <macro expansion>:1:1
-  |
-1 | #[belongs_to()]
-  | ^
-  |
-  = help: e.g. `#[belongs_to(User)]`
+  --> $DIR/belongs_to_invalid_option_syntax.rs:25:3
+   |
+25 | #[belongs_to()]
+   |   ^^^^^^^^^^
+   |
+   = help: e.g. `#[belongs_to(User)]` or `#[belongs_to(parent = "User<'_>")]
 
 error: Expected a struct name
- --> <macro expansion>:1:1
-  |
-1 | #[belongs_to(foreign_key = "bar_id")]
-  | ^
-  |
-  = help: e.g. `#[belongs_to(User)]`
+  --> $DIR/belongs_to_invalid_option_syntax.rs:26:3
+   |
+26 | #[belongs_to(foreign_key = "bar_id")]
+   |   ^^^^^^^^^^
+   |
+   = help: e.g. `#[belongs_to(User)]` or `#[belongs_to(parent = "User<'_>")]
 
 error: `foreign_key` must be in the form `foreign_key = "value"`
- --> <macro expansion>:1:1
-  |
-1 | #[belongs_to(Bar, foreign_key)]
-  | ^
+  --> $DIR/belongs_to_invalid_option_syntax.rs:27:19
+   |
+27 | #[belongs_to(Bar, foreign_key)]
+   |                   ^^^^^^^^^^^
 
 warning: The form `foreign_key(value)` is deprecated. Use `foreign_key = "value"` instead
- --> <macro expansion>:1:1
-  |
-1 | #[belongs_to(Bar, foreign_key(bar_id))]
-  | ^
+  --> $DIR/belongs_to_invalid_option_syntax.rs:28:19
+   |
+28 | #[belongs_to(Bar, foreign_key(bar_id))]
+   |                   ^^^^^^^^^^^
 
 warning: Unrecognized option random_option
- --> <macro expansion>:1:1
-  |
-1 | #[belongs_to(Baz, foreign_key = "bar_id", random_option)]
-  | ^
+  --> $DIR/belongs_to_invalid_option_syntax.rs:29:43
+   |
+29 | #[belongs_to(Baz, foreign_key = "bar_id", random_option)]
+   |                                           ^^^^^^^^^^^^^
 
 error: aborting due to 5 previous errors
 

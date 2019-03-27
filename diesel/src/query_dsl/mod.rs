@@ -22,7 +22,6 @@ use query_builder::locking_clause as lock;
 use query_source::{joins, Table};
 use result::{first_or_not_found, QueryResult};
 
-#[cfg(diesel_experimental)]
 mod aliased_dsl;
 mod belonging_to_dsl;
 #[doc(hidden)]
@@ -37,6 +36,7 @@ pub mod limit_dsl;
 #[doc(hidden)]
 pub mod load_dsl;
 mod locking_dsl;
+mod nullable_select_dsl;
 mod offset_dsl;
 mod order_dsl;
 mod save_changes_dsl;
@@ -59,7 +59,6 @@ pub use self::save_changes_dsl::{SaveChangesDsl, UpdateAndFetchResults};
 /// However, generic code may need to include a where clause that references
 /// these traits.
 pub mod methods {
-    #[cfg(diesel_experimental)]
     pub use super::aliased_dsl::AliasedDsl;
     pub use super::boxed_dsl::BoxedDsl;
     pub use super::distinct_dsl::*;
@@ -67,10 +66,8 @@ pub mod methods {
     pub use super::filter_dsl::*;
     pub use super::limit_dsl::LimitDsl;
     pub use super::load_dsl::{ExecuteDsl, LoadQuery};
-    #[cfg(feature = "with-deprecated")]
-    #[allow(deprecated)]
-    pub use super::locking_dsl::ForUpdateDsl;
     pub use super::locking_dsl::{LockingDsl, ModifyLockDsl};
+    pub use super::nullable_select_dsl::SelectNullableDsl;
     pub use super::offset_dsl::OffsetDsl;
     pub use super::order_dsl::{OrderDsl, ThenOrderDsl};
     pub use super::select_dsl::SelectDsl;
@@ -804,31 +801,6 @@ pub trait QueryDsl: Sized {
     /// // Executes `SELECT * FROM users FOR UPDATE`
     /// users.for_update().load(&connection)
     /// ```
-    #[cfg(feature = "with-deprecated")]
-    #[allow(deprecated)]
-    fn for_update(self) -> ForUpdate<Self>
-    where
-        Self: methods::ForUpdateDsl,
-    {
-        methods::ForUpdateDsl::for_update(self)
-    }
-
-    /// Adds `FOR UPDATE` to the end of the select statement.
-    ///
-    /// This method is only available for MySQL and PostgreSQL. SQLite does not
-    /// provide any form of row locking.
-    ///
-    /// Additionally, `.for_update` cannot be used on queries with a distinct
-    /// clause, group by clause, having clause, or any unions. Queries with
-    /// a `FOR UPDATE` clause cannot be boxed.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// // Executes `SELECT * FROM users FOR UPDATE`
-    /// users.for_update().load(&connection)
-    /// ```
-    #[cfg(not(feature = "with-deprecated"))]
     fn for_update(self) -> ForUpdate<Self>
     where
         Self: methods::LockingDsl<lock::ForUpdate>,
@@ -1050,7 +1022,6 @@ pub trait QueryDsl: Sized {
         methods::SingleValueDsl::single_value(self)
     }
 
-    #[cfg(diesel_experimental)]
     /// Aliases the query, allowing tables to appear more than once in the same query or joining to
     /// a subselect
     ///
@@ -1061,6 +1032,46 @@ pub trait QueryDsl: Sized {
         Self: methods::AliasedDsl<T>,
     {
         methods::AliasedDsl::aliased(self, alias)
+    }
+    /// Coerce the SQL type of the select clause to it's nullable equivalent.
+    ///
+    /// This is use full for writing queries that contain subselects on non null
+    /// fields comparing them to nullable fields.
+    /// ```rust
+    /// # #[macro_use] extern crate diesel;
+    /// # include!("../doctest_setup.rs");
+    /// #
+    /// # fn main() {
+    /// #    run_test();
+    /// # }
+    /// #
+    /// # fn run_test() -> QueryResult<()> {
+    /// #     let connection = establish_connection();
+    /// table! {
+    ///     users {
+    ///         id -> Integer,
+    ///         name -> Text,
+    ///     }
+    /// }
+    ///
+    /// table! {
+    ///     posts {
+    ///         id -> Integer,
+    ///         by_user -> Nullable<Text>,
+    ///     }
+    /// }
+    ///
+    /// # let _: Vec<(i32, Option<String>)> =
+    /// posts::table.filter(
+    ///    posts::by_user.eq_any(users::table.select(users::name).nullable())
+    /// ).load(&connection)?;
+    /// #     Ok(())
+    /// # }
+    fn nullable(self) -> NullableSelect<Self>
+    where
+        Self: methods::SelectNullableDsl,
+    {
+        methods::SelectNullableDsl::nullable(self)
     }
 }
 
@@ -1321,11 +1332,9 @@ pub trait RunQueryDsl<Conn>: Sized {
 }
 
 // Note: We could have a blanket `AsQuery` impl here, which would apply to
-// everything we want it to. However, the entire point of this trait is to have
-// trait resolution succeed, and the where clause on the methods fail when the
-// query is invalid. So we need things to unconditionally implement this trait.
-impl<T, Conn> RunQueryDsl<Conn> for T
-where
-    T: Table,
-{
-}
+// everything we want it to. However, when a query is invalid, we specifically
+// want the error to happen on the where clause of the method instead of trait
+// resolution. Otherwise our users will get an error saying `<3 page long type>:
+// ExecuteDsl is not satisfied` instead of a specific error telling them what
+// part of their query is wrong.
+impl<T, Conn> RunQueryDsl<Conn> for T where T: Table {}

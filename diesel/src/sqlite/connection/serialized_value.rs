@@ -1,10 +1,9 @@
 extern crate libsqlite3_sys as ffi;
 
 use std::os::raw as libc;
-use std::ptr;
+use std::ptr::{self, NonNull};
 
 use sqlite::SqliteType;
-use util::NonNull;
 
 pub struct SerializedValue {
     pub ty: SqliteType,
@@ -14,7 +13,7 @@ pub struct SerializedValue {
 impl SerializedValue {
     // We are always reading potentially misaligned pointers with
     // `ptr::read_unaligned`
-    #[cfg_attr(feature = "clippy", allow(cast_ptr_alignment))]
+    #[allow(clippy::cast_ptr_alignment)]
     pub(crate) fn bind_to(self, stmt: NonNull<ffi::sqlite3_stmt>, idx: libc::c_int) -> libc::c_int {
         // This unsafe block assumes the following invariants:
         //
@@ -65,7 +64,7 @@ impl SerializedValue {
 
     // We are always reading potentially misaligned pointers with
     // `ptr::read_unaligned`
-    #[cfg_attr(feature = "clippy", allow(cast_ptr_alignment))]
+    #[allow(clippy::cast_ptr_alignment)]
     pub fn result_of(self, ctx: *mut ffi::sqlite3_context) {
         // This unsafe block assumes the following invariants:
         //

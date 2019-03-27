@@ -37,12 +37,14 @@ where
         let query = select(value.clone().into_sql::<ST>());
         let result = query.get_result::<T>(connection);
         match result {
-            Ok(res) => if value != res {
-                println!("{:?}, {:?}", value, res);
-                false
-            } else {
-                true
-            },
+            Ok(res) => {
+                if value != res {
+                    println!("{:?}, {:?}", value, res);
+                    false
+                } else {
+                    true
+                }
+            }
             Err(Error::DatabaseError(_, ref e))
                 if e.message() == "invalid byte sequence for encoding \"UTF8\": 0x00" =>
             {
@@ -266,7 +268,7 @@ mod pg_types {
 mod mysql_types {
     use super::*;
 
-    test_round_trip!(i8_roundtrips, Tinyint, i8);
+    test_round_trip!(i8_roundtrips, TinyInt, i8);
     test_round_trip!(
         naive_datetime_roundtrips,
         Timestamp,

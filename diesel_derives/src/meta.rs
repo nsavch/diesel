@@ -1,4 +1,4 @@
-use proc_macro2::Span;
+use proc_macro2::{Ident, Span};
 use syn;
 use syn::fold::Fold;
 use syn::spanned::Spanned;
@@ -16,7 +16,7 @@ impl MetaItem {
             .iter()
             .filter_map(|attr| {
                 attr.interpret_meta()
-                    .map(|m| FixSpan(attr.pound_token.0[0]).fold_meta(m))
+                    .map(|m| FixSpan(attr.pound_token.spans[0]).fold_meta(m))
             })
             .filter(|m| m.name() == name)
             .map(|meta| Self { meta })
@@ -30,19 +30,21 @@ impl MetaItem {
     pub fn empty(name: &str) -> Self {
         Self {
             meta: syn::Meta::List(syn::MetaList {
-                ident: name.into(),
+                ident: Ident::new(name, Span::call_site()),
                 paren_token: Default::default(),
                 nested: Default::default(),
             }),
         }
     }
 
-    pub fn nested_item(&self, name: &str) -> Result<Self, Diagnostic> {
-        self.nested().and_then(|mut i| {
-            i.find(|n| n.name() == name).ok_or_else(|| {
-                self.span()
-                    .error(format!("Missing required option {}", name))
-            })
+    pub fn nested_item(&self, name: &str) -> Result<Option<Self>, Diagnostic> {
+        self.nested().map(|mut i| i.find(|n| n.name() == name))
+    }
+
+    pub fn required_nested_item(&self, name: &str) -> Result<Self, Diagnostic> {
+        self.nested_item(name)?.ok_or_else(|| {
+            self.span()
+                .error(format!("Missing required option `{}`", name))
         })
     }
 
@@ -100,7 +102,7 @@ impl MetaItem {
         use syn::Meta::*;
 
         match self.meta {
-            Word(x) => Ok(x),
+            Word(ref x) => Ok(x.clone()),
             _ => {
                 let meta = &self.meta;
                 Err(self.span().error(format!(
@@ -117,7 +119,8 @@ impl MetaItem {
 
         match self.meta {
             List(ref list) => Ok(Nested(list.nested.iter())),
-            _ => Err(self.span()
+            _ => Err(self
+                .span()
                 .error(format!("`{0}` must be in the form `{0}(...)`", self.name()))),
         }
     }
@@ -128,7 +131,12 @@ impl MetaItem {
 
     pub fn has_flag(&self, flag: &str) -> bool {
         self.nested()
-            .map(|mut n| n.any(|m| m.expect_word() == flag))
+            .map(|mut n| {
+                n.any(|m| match m.word() {
+                    Ok(word) => word == flag,
+                    Err(_) => false,
+                })
+            })
             .unwrap_or_else(|e| {
                 e.emit();
                 false
@@ -148,7 +156,7 @@ impl MetaItem {
         })
     }
 
-    fn str_value(&self) -> Result<String, Diagnostic> {
+    pub fn str_value(&self) -> Result<String, Diagnostic> {
         self.lit_str_value().map(syn::LitStr::value)
     }
 
@@ -197,7 +205,7 @@ impl MetaItem {
             Ok(x) => x,
             Err(_) => return,
         };
-        let unrecognized_options = nested.filter(|n| !options.contains(&n.name().as_ref()));
+        let unrecognized_options = nested.filter(|n| !options.iter().any(|&o| n.name() == o));
         for ignored in unrecognized_options {
             ignored
                 .span()
@@ -210,7 +218,7 @@ impl MetaItem {
         use syn::Meta::*;
 
         match self.meta {
-            Word(ident) => ident.span(),
+            Word(ref ident) => ident.span(),
             List(ref meta) => meta.nested.span(),
             NameValue(ref meta) => meta.lit.span(),
         }

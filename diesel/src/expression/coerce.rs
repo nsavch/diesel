@@ -39,17 +39,9 @@ where
     type SqlType = ST;
 }
 
-impl<T, ST, QS> SelectableExpression<QS> for Coerce<T, ST>
-where
-    T: SelectableExpression<QS>,
-{
-}
+impl<T, ST, QS> SelectableExpression<QS> for Coerce<T, ST> where T: SelectableExpression<QS> {}
 
-impl<T, ST, QS> AppearsOnTable<QS> for Coerce<T, ST>
-where
-    T: AppearsOnTable<QS>,
-{
-}
+impl<T, ST, QS> AppearsOnTable<QS> for Coerce<T, ST> where T: AppearsOnTable<QS> {}
 
 impl<T, ST, DB> QueryFragment<DB> for Coerce<T, ST>
 where
@@ -61,9 +53,4 @@ where
     }
 }
 
-impl<T, ST> NonAggregate for Coerce<T, ST>
-where
-    T: NonAggregate,
-    Coerce<T, ST>: Expression,
-{
-}
+impl<T, ST> NonAggregate for Coerce<T, ST> where T: NonAggregate {}

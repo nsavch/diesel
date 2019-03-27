@@ -44,7 +44,7 @@ pub struct Bool;
 ///
 /// This is only available on MySQL.
 /// Keep in mind that `infer_schema!` will see `TINYINT(1)` as `Bool`,
-/// not `Tinyint`.
+/// not `TinyInt`.
 ///
 /// ### [`ToSql`](../serialize/trait.ToSql.html) impls
 ///
@@ -57,7 +57,9 @@ pub struct Bool;
 /// [i8]: https://doc.rust-lang.org/nightly/std/primitive.i8.html
 #[derive(Debug, Clone, Copy, Default, QueryId, SqlType)]
 #[mysql_type = "Tiny"]
-pub struct Tinyint;
+pub struct TinyInt;
+#[doc(hidden)]
+pub type Tinyint = TinyInt;
 
 /// The small integer SQL type.
 ///
@@ -400,16 +402,6 @@ pub trait HasSqlType<ST>: TypeMetadata {
     /// This method may use `lookup` to do dynamic runtime lookup. Implementors
     /// of this method should not do dynamic lookup unless absolutely necessary
     fn metadata(lookup: &Self::MetadataLookup) -> Self::TypeMetadata;
-
-    #[doc(hidden)]
-    #[cfg(feature = "with-deprecated")]
-    #[deprecated(
-        since = "1.4.0",
-        note = "This method is no longer used, and has been deprecated without replacement"
-    )]
-    fn row_metadata(out: &mut Vec<Self::TypeMetadata>, lookup: &Self::MetadataLookup) {
-        out.push(Self::metadata(lookup))
-    }
 
     #[doc(hidden)]
     #[cfg(feature = "mysql")]

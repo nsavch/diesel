@@ -16,7 +16,8 @@ pub fn name(migration: &Migration) -> MigrationName {
 
 impl<'a> fmt::Display for MigrationName<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let file_name = self.migration
+        let file_name = self
+            .migration
             .file_path()
             .and_then(|file_path| file_path.file_name())
             .and_then(|file| file.to_str());
@@ -29,6 +30,31 @@ impl<'a> fmt::Display for MigrationName<'a> {
     }
 }
 
+#[allow(missing_debug_implementations)]
+#[derive(Clone, Copy)]
+pub struct MigrationFileName<'a> {
+    pub migration: &'a Migration,
+    pub sql_file: &'a str,
+}
+
+pub fn file_name<'a>(migration: &'a Migration, sql_file: &'a str) -> MigrationFileName<'a> {
+    MigrationFileName {
+        migration,
+        sql_file,
+    }
+}
+
+impl<'a> fmt::Display for MigrationFileName<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let fpath = match self.migration.file_path() {
+            None => return Err(fmt::Error),
+            Some(v) => v.join(self.sql_file),
+        };
+        f.write_str(fpath.to_str().unwrap_or("Invalid utf8 in filename"))?;
+        Ok(())
+    }
+}
+
 pub fn migration_from(path: PathBuf) -> Result<Box<Migration>, MigrationError> {
     #[cfg(feature = "barrel")]
     match ::barrel::integrations::diesel::migration_from(&path) {
@@ -37,7 +63,7 @@ pub fn migration_from(path: PathBuf) -> Result<Box<Migration>, MigrationError> {
     }
 
     if valid_sql_migration_directory(&path) {
-        let version = try!(version_from_path(&path));
+        let version = version_from_path(&path)?;
         Ok(Box::new(SqlFileMigration(path, version)))
     } else {
         Err(MigrationError::UnknownMigrationFormat(path))
@@ -51,9 +77,9 @@ fn valid_sql_migration_directory(path: &Path) -> bool {
 }
 
 fn file_names(path: &Path) -> Result<Vec<String>, MigrationError> {
-    try!(path.read_dir())
+    path.read_dir()?
         .map(|entry| {
-            let file_name = try!(entry).file_name();
+            let file_name = entry?.file_name();
 
             // FIXME(killercup): Decide whether to add MigrationError variant for this
             match file_name.into_string() {
@@ -74,7 +100,7 @@ fn file_names(path: &Path) -> Result<Vec<String>, MigrationError> {
 #[doc(hidden)]
 pub fn version_from_path(path: &Path) -> Result<String, MigrationError> {
     path.file_name()
-        .expect(&format!("Can't get file name from path `{:?}`", path))
+        .unwrap_or_else(|| panic!("Can't get file name from path `{:?}`", path))
         .to_string_lossy()
         .split('_')
         .nth(0)
@@ -107,14 +133,14 @@ impl Migration for SqlFileMigration {
 
 fn run_sql_from_file(conn: &SimpleConnection, path: &Path) -> Result<(), RunMigrationsError> {
     let mut sql = String::new();
-    let mut file = try!(File::open(path));
-    try!(file.read_to_string(&mut sql));
+    let mut file = File::open(path)?;
+    file.read_to_string(&mut sql)?;
 
     if sql.is_empty() {
         return Err(RunMigrationsError::EmptyMigration);
     }
 
-    try!(conn.batch_execute(&sql));
+    conn.batch_execute(&sql)?;
     Ok(())
 }
 

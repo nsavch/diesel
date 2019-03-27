@@ -49,6 +49,35 @@
 //! The struct given to `#[belongs_to]` must be in scope,
 //! so you will need `use some_module::User` if `User` is defined in another module.
 //!
+//! If the parent record is generic over lifetimes, they can be written as `'_`.
+//! You will also need to wrap the type in quotes until
+//! `unrestricted_attribute_tokens` is stable.
+//!
+//! ```rust
+//! # #[macro_use] extern crate diesel;
+//! # include!("../doctest_setup.rs");
+//! # use schema::{posts, users};
+//! # use std::borrow::Cow;
+//! #
+//! #[derive(Identifiable)]
+//! #[table_name = "users"]
+//! pub struct User<'a> {
+//!     id: i32,
+//!     name: Cow<'a, str>,
+//! }
+//!
+//! #[derive(Associations)]
+//! #[belongs_to(parent = "User<'_>")]
+//! #[table_name = "posts"]
+//! pub struct Post {
+//!     id: i32,
+//!     user_id: i32,
+//!     title: String,
+//! }
+//! #
+//! # fn main() {}
+//! ```
+//!
 //! [`Identifiable`]: trait.Identifiable.html
 //!
 //! By default, Diesel assumes that your foreign keys will follow the convention `table_name_id`.
@@ -117,10 +146,11 @@
 //! a user and all of its posts, that type is `(User, Vec<Post>)`.
 //!
 //! Next lets look at how to load the children for more than one parent record.
-//! [`belonging_to`][belonging-to] can be used to load the data, but we'll also need to group it
-//! with its parents. For this we use an additional method [`grouped_by`][grouped-by]
+//! [`belonging_to`] can be used to load the data, but we'll also need to group it
+//! with its parents. For this we use an additional method [`grouped_by`].
 //!
-//! [grouped-by]: trait.GroupedBy.html#tymethod.grouped_by
+//! [`grouped_by`]: trait.GroupedBy.html#tymethod.grouped_by
+//! [`belonging_to`]: ../query_dsl/trait.BelongingToDsl.html#tymethod.belonging_to
 //!
 //! ```rust
 //! # #[macro_use] extern crate diesel;
@@ -230,7 +260,7 @@
 //! # }
 //! ```
 //!
-//! `grouped_by` can be called multiple times
+//! [`grouped_by`] can be called multiple times
 //! if you have multiple children or grandchildren.
 //!
 //! For example, this code will load some users,

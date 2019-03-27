@@ -1,14 +1,14 @@
-#![cfg_attr(feature = "clippy", allow(too_many_arguments))]
+#![allow(clippy::too_many_arguments)]
 
 extern crate pq_sys;
 
 use self::pq_sys::*;
 use std::ffi::{CStr, CString};
 use std::os::raw as libc;
+use std::ptr::NonNull;
 use std::{ptr, str};
 
 use result::*;
-use util::NonNull;
 
 #[allow(missing_debug_implementations, missing_copy_implementations)]
 pub struct RawConnection {
@@ -19,7 +19,7 @@ impl RawConnection {
     pub fn establish(database_url: &str) -> ConnectionResult<Self> {
         use self::ConnStatusType::*;
 
-        let connection_string = try!(CString::new(database_url));
+        let connection_string = CString::new(database_url)?;
         let connection_ptr = unsafe { PQconnectdb(connection_string.as_ptr()) };
         let connection_status = unsafe { PQstatus(connection_ptr) };
 
@@ -122,6 +122,7 @@ unsafe impl Send for RawResult {}
 unsafe impl Sync for RawResult {}
 
 impl RawResult {
+    #[allow(clippy::new_ret_no_self)]
     fn new(ptr: *mut PGresult, conn: &RawConnection) -> QueryResult<Self> {
         NonNull::new(ptr).map(RawResult).ok_or_else(|| {
             Error::DatabaseError(
