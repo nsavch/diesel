@@ -229,7 +229,7 @@ impl MetaItem {
     }
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)] // https://github.com/rust-lang-nursery/rustfmt/issues/2392
+#[rustfmt::skip] // https://github.com/rust-lang-nursery/rustfmt/issues/2392
 pub struct Nested<'a>(syn::punctuated::Iter<'a, syn::NestedMeta>);
 
 impl<'a> Iterator for Nested<'a> {
